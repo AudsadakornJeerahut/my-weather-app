@@ -1,90 +1,129 @@
-const apiKey = '53ebd5f6d537c205d2d7396b740bcd37'; // << วาง API Key ที่คัดลอกมาที่นี่
+const apiKey = '53ebd5f6d537c205d2d7396b740bcd37';
 
+// 1. เลือก DOM Elements
 const searchForm = document.querySelector('#search-form');
 const cityInput = document.querySelector('#city-input');
-const weatherInfoContainer = document.querySelector('#weather-info-container');
+const favoritesContainer = document.querySelector('#favorites-container');
+const refreshBtn = document.querySelector('#refresh-btn');
 
-searchForm.addEventListener('submit', (event) => {
-    event.preventDefault(); // ป้องกันไม่ให้หน้าเว็บรีโหลดเมื่อกด submit
+// --- EVENT LISTENERS ---
+// โหลดเมืองโปรดเมื่อเปิดหน้าเว็บ
+document.addEventListener('DOMContentLoaded', loadFavoriteCities);
 
-    const cityName = cityInput.value.trim(); // .trim() เพื่อตัดช่องว่างหน้า-หลัง
-
+// จัดการการเพิ่มเมืองใหม่
+searchForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const cityName = cityInput.value.trim();
     if (cityName) {
-        getWeather(cityName);
-    } else {
-        alert('กรุณาป้อนชื่อเมือง');
+        addCityToFavorites(cityName);
+        cityInput.value = '';
     }
 });
 
-async function getWeather(city) {
-    // แสดงสถานะ Loading
-    weatherInfoContainer.innerHTML = `<p>กำลังโหลดข้อมูล...</p>`;
+// จัดการการลบเมือง
+favoritesContainer.addEventListener('click', event => {
+    if (event.target.classList.contains('remove-btn')) {
+        const card = event.target.closest('.weather-card');
+        const cityName = card.dataset.city;
+        if (cityName) {
+            removeCityFromFavorites(cityName);
+        }
+    }
+});
 
-    const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric&lang=th`;
+// จัดการการ Refresh
+refreshBtn.addEventListener('click', loadFavoriteCities);
 
+
+// --- FUNCTIONS ---
+
+function getFavoriteCities() {
+    const citiesJSON = localStorage.getItem('favoriteCities');
+    return citiesJSON ? JSON.parse(citiesJSON) : [];
+}
+
+function saveFavoriteCities(cities) {
+    localStorage.setItem('favoriteCities', JSON.stringify(cities));
+}
+
+function loadFavoriteCities() {
+    favoritesContainer.innerHTML = ''; // ล้าง DOM ก่อนโหลดใหม่
+    const cities = getFavoriteCities();
+    cities.forEach(city => fetchAndDisplayWeather(city));
+}
+
+async function addCityToFavorites(cityName) {
+     let cities = getFavoriteCities();
+    
+    // ดึงข้อมูลจาก API เพื่อตรวจสอบชื่อเมืองที่ถูกต้อง
+    const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${cityName}&appid=${apiKey}&units=metric&lang=th`;
     try {
         const response = await fetch(apiUrl);
-
-        if (!response.ok) {
-            throw new Error('ไม่พบข้อมูลเมืองนี้');
-        }
-
+        if (!response.ok) throw new Error(`ไม่พบข้อมูลของ ${cityName}`);
+        
         const data = await response.json();
-        displayWeather(data);
+        const apiCityName = data.name; // ใช้ชื่อเมืองที่ได้จาก API
+        
+        // ตรวจสอบว่าเมืองอยู่ใน favorites หรือไม่ (case-insensitive)
+        if (!cities.some(city => city.toLowerCase() === apiCityName.toLowerCase())) {
+            cities.push(apiCityName); // เพิ่มชื่อเมืองจาก API
+            saveFavoriteCities(cities);
+            await fetchAndDisplayWeather(apiCityName);
+        } else {
+            alert(`${apiCityName} อยู่ในรายการโปรดแล้ว`);
+        }
+    } catch (error) {
+        console.error(error);
+        alert(`ไม่สามารถเพิ่ม ${cityName} ได้: ${error.message}`);
+    }
+}
+
+function removeCityFromFavorites(cityName) {
+    let cities = getFavoriteCities();
+    // กรองเมืองออกจาก array โดยใช้ case-insensitive
+    cities = cities.filter(city => city.toLowerCase() !== cityName.toLowerCase());
+    // บันทึก array ใหม่ลง localStorage
+    saveFavoriteCities(cities);
+
+    // ลบการ์ดออกจาก DOM
+    const card = favoritesContainer.querySelector(`[data-city="${cityName}"]`);
+    if (card) {
+        card.remove();
+    }
+}
+
+async function fetchAndDisplayWeather(city) {
+    const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric&lang=th`;
+    
+    try {
+        const response = await fetch(apiUrl);
+        if (!response.ok) throw new Error(`ไม่พบข้อมูลของ ${city}`);
+        
+        const data = await response.json();
+        
+        const { name, main, weather } = data;
+        const card = document.createElement('div');
+        card.className = 'weather-card';
+        card.setAttribute('data-city', name); 
+        
+        card.innerHTML = `
+            <div>
+                <h3>${name}</h3>
+                <p>${weather[0].description}</p>
+            </div>
+            <div class="text-right">
+                <p class="temp">${main.temp.toFixed(1)}°C</p>
+            </div>
+            <button class="remove-btn">X</button>
+        `;
+        
+        favoritesContainer.appendChild(card);
 
     } catch (error) {
-        weatherInfoContainer.innerHTML = `<p class="error">${error.message}</p>`;
+        console.error(error);
+        const card = document.createElement('div');
+        card.className = 'weather-card';
+        card.innerHTML = `<h3>${city}</h3><p class="error">${error.message}</p>`;
+        favoritesContainer.appendChild(card);
     }
-}
-
-function displayWeather(data) {
-    const { name, main, weather } = data;
-    const { temp, humidity } = main;
-    const { description, icon, main: weatherMain } = weather[0];
-
-    // HTML ของข้อมูลอากาศ
-    const weatherHtml = `
-        <h2>${name}</h2>
-        <img src="https://openweathermap.org/img/wn/${icon}@4x.png" alt="${description}">
-        <p class="temp">${temp.toFixed(1)}°C</p>
-        <p>${description}</p>
-        <p>ความชื้น: ${humidity}%</p>
-    `;
-
-    weatherInfoContainer.innerHTML = weatherHtml;
-
-    // เปลี่ยนสีพื้นหลังตามสภาพอากาศ
-    changeBackground(weatherMain);
-}
-
-function changeBackground(weatherMain) {
-    let bgColor;
-
-    switch (weatherMain.toLowerCase()) {
-        case "clear":
-            bgColor = "linear-gradient(to bottom, #4facfe, #00f2fe)"; // ฟ้าใส
-            break;
-        case "clouds":
-            bgColor = "linear-gradient(to bottom, #757f9a, #d7dde8)"; // เมฆ
-            break;
-        case "rain":
-        case "drizzle":
-            bgColor = "linear-gradient(to bottom, #373b44, #4286f4)"; // ฝน
-            break;
-        case "thunderstorm":
-            bgColor = "linear-gradient(to bottom, #141e30, #243b55)"; // พายุ
-            break;
-        case "snow":
-            bgColor = "linear-gradient(to bottom, #83a4d4, #b6fbff)"; // หิมะ
-            break;
-        case "mist":
-        case "fog":
-        case "haze":
-            bgColor = "linear-gradient(to bottom, #606c88, #3f4c6b)"; // หมอก
-            break;
-        default:
-            bgColor = "#051923"; // ค่าเริ่มต้น
-    }
-
-    document.body.style.background = bgColor;
 }
