@@ -38,19 +38,53 @@ async function getWeather(city) {
 }
 
 function displayWeather(data) {
-    // ใช้ Destructuring เพื่อดึงค่าที่ต้องการออกจาก Object
     const { name, main, weather } = data;
     const { temp, humidity } = main;
-    const { description, icon } = weather[0];
+    const { description, icon, main: weatherMain } = weather[0];
 
-    // ใช้ Template Literals ในการสร้าง HTML
+    // HTML ของข้อมูลอากาศ
     const weatherHtml = `
         <h2>${name}</h2>
-        <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="${description}">
+        <img src="https://openweathermap.org/img/wn/${icon}@4x.png" alt="${description}">
         <p class="temp">${temp.toFixed(1)}°C</p>
         <p>${description}</p>
         <p>ความชื้น: ${humidity}%</p>
     `;
 
     weatherInfoContainer.innerHTML = weatherHtml;
+
+    // เปลี่ยนสีพื้นหลังตามสภาพอากาศ
+    changeBackground(weatherMain);
+}
+
+function changeBackground(weatherMain) {
+    let bgColor;
+
+    switch (weatherMain.toLowerCase()) {
+        case "clear":
+            bgColor = "linear-gradient(to bottom, #4facfe, #00f2fe)"; // ฟ้าใส
+            break;
+        case "clouds":
+            bgColor = "linear-gradient(to bottom, #757f9a, #d7dde8)"; // เมฆ
+            break;
+        case "rain":
+        case "drizzle":
+            bgColor = "linear-gradient(to bottom, #373b44, #4286f4)"; // ฝน
+            break;
+        case "thunderstorm":
+            bgColor = "linear-gradient(to bottom, #141e30, #243b55)"; // พายุ
+            break;
+        case "snow":
+            bgColor = "linear-gradient(to bottom, #83a4d4, #b6fbff)"; // หิมะ
+            break;
+        case "mist":
+        case "fog":
+        case "haze":
+            bgColor = "linear-gradient(to bottom, #606c88, #3f4c6b)"; // หมอก
+            break;
+        default:
+            bgColor = "#051923"; // ค่าเริ่มต้น
+    }
+
+    document.body.style.background = bgColor;
 }
